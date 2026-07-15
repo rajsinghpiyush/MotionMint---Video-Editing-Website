@@ -123,20 +123,28 @@ export async function exportVideo(timeline, socket) {
       // 3. Process Subtitles
       subtitleClips.forEach((sub, idx) => {
         const nextBaseOutput = `sub_${idx}`;
-        const safeText = sub.text.replace(/'/g, "\\'");
+        // Replace single quote with smart quote so we can wrap the whole text in single quotes safely
+        const safeText = sub.text.replace(/'/g, "\u2019"); 
         
+        const drawtextOptions = {
+          text: `'${safeText}'`,
+          fontcolor: 'white',
+          fontsize: '48',
+          x: '(w-text_w)/2',
+          y: '(h-text_h)*0.8',
+          enable: `between(t,${sub.startOffset},${sub.startOffset + sub.duration})`,
+          bordercolor: 'black',
+          borderw: 2
+        };
+
+        // Fix Windows drive letter colon escaping by using root absolute path without drive letter
+        if (process.platform === 'win32') {
+          drawtextOptions.fontfile = '/Windows/Fonts/arial.ttf';
+        }
+
         filterGraph.push({
           filter: 'drawtext',
-          options: {
-            text: safeText,
-            fontcolor: 'white',
-            fontsize: '48',
-            x: '(w-text_w)/2',
-            y: '(h-text_h)*0.8',
-            enable: `between(t,${sub.startOffset},${sub.startOffset + sub.duration})`,
-            bordercolor: 'black',
-            borderw: 2
-          },
+          options: drawtextOptions,
           inputs: currentBaseOutput,
           outputs: nextBaseOutput
         });

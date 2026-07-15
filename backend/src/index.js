@@ -6,7 +6,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
-import { processVideo } from './services/videoProcessor.js';
+import { videoQueue, videoQueueEvents } from './config/queue.js';
+import './workers/videoWorker.js';
 import exportRouter from './routes/export.js';
 
 import { fileURLToPath } from 'url';
@@ -52,6 +53,43 @@ io.on('connection', (socket) => {
   });
 });
 
+// Setup Queue Events for real-time updates
+videoQueueEvents.on('progress', ({ jobId, data }) => {
+  if (!data) return;
+  const { percent, status, clips, clientId } = data;
+  if (clientId) {
+    if (percent) {
+      io.to(clientId).emit('video:progress', { percent, status });
+    }
+    if (clips) {
+      io.to(clientId).emit('video:transcription', { clips });
+    }
+  }
+});
+
+videoQueueEvents.on('completed', ({ jobId, returnvalue }) => {
+  const { downloadUrl, subtitleClips, clientId } = returnvalue;
+  if (clientId) {
+    if (subtitleClips) {
+      io.to(clientId).emit('video:transcription', { clips: subtitleClips });
+    }
+    io.to(clientId).emit('video:ready', { downloadUrl });
+  }
+});
+
+videoQueueEvents.on('failed', async ({ jobId, failedReason }) => {
+  console.error(`Job ${jobId} failed: ${failedReason}`);
+  try {
+    const job = await videoQueue.getJob(jobId);
+    if (job && job.data && job.data.clientId) {
+      io.to(job.data.clientId).emit('video:error', { error: 'Failed to process video: ' + failedReason });
+    }
+  } catch (err) {
+    console.error('Could not fetch failed job details:', err);
+  }
+});
+
+
 app.post('/api/upload', upload.single('video'), async (req, res) => {
   try {
     if (!req.file) {
@@ -60,14 +98,17 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
 
     const clientId = req.body.clientId;
     const filePath = req.file.path;
+    const filename = req.file.filename;
 
-    res.status(202).json({ message: 'Video upload received, processing started', jobId: req.file.filename });
+    const job = await videoQueue.add('process-video', {
+      inputPath: filePath,
+      filename,
+      clientId
+    });
 
-    processVideo(filePath, req.file.filename, clientId, io).catch(err => {
-      console.error('Error processing video:', err);
-      if (clientId) {
-        io.to(clientId).emit('video:error', { error: 'Failed to process video' });
-      }
+    res.status(202).json({ 
+      message: 'Video upload received, processing started', 
+      jobId: job.id 
     });
 
   } catch (error) {
