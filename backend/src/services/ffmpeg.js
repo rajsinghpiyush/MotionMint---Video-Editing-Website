@@ -4,6 +4,7 @@ import ffprobeInstaller from '@ffprobe-installer/ffprobe';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { uploadToS3 } from './s3.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -189,16 +190,47 @@ export async function exportVideo(timeline, socket) {
           if (socket) socket.emit('exportProgress', { progress: 0, status: 'Starting render...' });
         })
         .on('progress', (progress) => {
-          if (socket && progress.percent) {
-             socket.emit('exportProgress', { progress: Math.min(99, Math.round(progress.percent)), status: 'Rendering composited frames...' });
+          if (socket) {
+            let percent = progress.percent;
+            // Fallback: manually calculate percent if FFmpeg doesn't report it due to complex filters
+            if (!percent && progress.timemark) {
+              const parts = progress.timemark.split(':');
+              if (parts.length === 3) {
+                const currentSecs = parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2]);
+                percent = (currentSecs / projectDuration) * 100;
+              }
+            }
+            if (percent !== undefined && percent !== null) {
+              socket.emit('exportProgress', { progress: Math.min(99, Math.round(percent)), status: 'Rendering composited frames...' });
+            } else {
+              socket.emit('exportProgress', { progress: 50, status: 'Rendering composited frames...' });
+            }
           }
         })
-        .on('end', () => {
-          console.log('Export finished successfully');
-          const fileName = path.basename(outputPath);
-          const downloadUrl = `http://localhost:3001/exports/${fileName}`;
-          if (socket) socket.emit('exportComplete', { downloadUrl });
-          resolve(downloadUrl);
+        .on('end', async () => {
+          console.log('Export finished locally, starting S3 upload...');
+          try {
+            if (socket) socket.emit('exportProgress', { progress: 100, status: 'Uploading final video to AWS S3...' });
+            
+            const fileName = path.basename(outputPath);
+            const downloadUrl = await uploadToS3(outputPath, fileName);
+            
+            console.log('S3 Upload complete. Cleaning up local files...');
+            if (socket) socket.emit('exportComplete', { downloadUrl });
+            resolve(downloadUrl);
+
+            // Cleanup local exported file ONLY, leave the raw uploads so the user can keep editing
+            try {
+              if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+              }
+            } catch(e) { console.error('Cleanup export error:', e); }
+
+          } catch (err) {
+            console.error('Error during S3 upload after export:', err);
+            if (socket) socket.emit('exportError', { error: 'Failed to upload export to S3: ' + err.message });
+            reject(err);
+          }
         })
         .on('error', (err) => {
           console.error('Error during export:', err);
