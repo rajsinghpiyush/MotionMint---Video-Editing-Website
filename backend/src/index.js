@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import { videoQueue, videoQueueEvents } from './config/queue.js';
 import './workers/videoWorker.js';
 import exportRouter from './routes/export.js';
+import { startCleanupCron } from './services/cleanup.js';
 
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -36,6 +37,9 @@ const uploadDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
+
+// Start automatic 24h file cleanup
+startCleanupCron();
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),

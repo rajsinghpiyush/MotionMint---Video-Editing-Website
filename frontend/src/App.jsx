@@ -10,6 +10,8 @@ import VideoPlayer from './components/VideoPlayer.jsx';
 import Timeline from './components/Timeline.jsx';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
 export default function App() {
   const [file, setFile] = useState(null);
   const dispatch = useDispatch();
@@ -47,7 +49,7 @@ export default function App() {
     if (!clientId) return;
     setExportState({ isExporting: true, progress: 0, status: 'Initializing...', url: null, error: null });
     try {
-      await axios.post('http://localhost:3001/api/export', {
+      await axios.post(`${API_URL}/api/export`, {
         timeline: timelineState,
         clientId
       });
@@ -73,7 +75,7 @@ export default function App() {
     formData.append('clientId', clientId);
 
     try {
-      await axios.post('http://localhost:3001/api/upload', formData, {
+      await axios.post(`${API_URL}/api/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -155,7 +157,7 @@ export default function App() {
                           
                           let backendUrl = URL.createObjectURL(newFile);
                           try {
-                            const res = await axios.post('http://localhost:3001/api/upload-raw', formData, {
+                            const res = await axios.post(`${API_URL}/api/upload-raw`, formData, {
                               headers: { 'Content-Type': 'multipart/form-data' }
                             });
                             backendUrl = res.data.url;

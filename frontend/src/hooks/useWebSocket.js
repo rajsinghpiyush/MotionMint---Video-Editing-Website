@@ -4,7 +4,7 @@ import { useDispatch } from 'react-redux';
 import { updateProgress, processingComplete, setError } from '../store/slices/videoSlice.js';
 import { addSubtitleClips } from '../store/slices/timelineSlice.js';
 
-const SOCKET_SERVER_URL = 'http://localhost:3001';
+const SOCKET_SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export const useWebSocket = () => {
   const [socket, setSocket] = useState(null);

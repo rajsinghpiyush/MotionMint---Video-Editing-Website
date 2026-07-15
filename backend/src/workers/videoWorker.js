@@ -30,6 +30,7 @@ const extractAudio = (inputPath, outputPath) => {
       .audioFrequency(16000)
       .audioChannels(1)
       .audioCodec('pcm_s16le')
+      .outputOptions(['-threads 2'])
       .output(outputPath)
       .on('end', () => resolve(outputPath))
       .on('error', (err) => reject(err))

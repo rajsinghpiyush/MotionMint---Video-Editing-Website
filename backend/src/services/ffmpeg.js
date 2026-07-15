@@ -170,6 +170,7 @@ export async function exportVideo(timeline, socket) {
 
       // Export settings
       const outputOptions = [
+        '-threads 2',
         `-map [${finalVideoOutput}]`,
         '-c:v libx264',
         '-pix_fmt yuv420p',
