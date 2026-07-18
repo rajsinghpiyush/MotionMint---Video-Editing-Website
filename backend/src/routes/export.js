@@ -25,6 +25,7 @@ export default function(io) {
         await exportVideo(timeline, socket);
       } catch (err) {
         console.error('Export failed:', err);
+        socket.emit('exportError', { error: err.message || 'Failed to export video.' });
       }
 
     } catch (error) {

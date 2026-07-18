@@ -39,9 +39,11 @@ export async function exportVideo(timeline, socket) {
       videoClips.forEach(clip => {
         let inputPath = clip.src;
         if (inputPath.includes('/uploads/')) {
-          const parts = inputPath.split('/uploads/');
-          const filename = parts[parts.length - 1];
+          const filename = decodeURIComponent(inputPath.split('/uploads/').pop());
           inputPath = path.join(__dirname, '../../uploads', filename);
+        } else if (inputPath.includes('/test-videos/')) {
+          const filename = decodeURIComponent(inputPath.split('/test-videos/').pop());
+          inputPath = path.join(__dirname, '../../test-videos', filename);
         }
         if (!fs.existsSync(inputPath)) {
           throw new Error(`File not found: ${inputPath}. This usually happens if you are trying to export a project that contains media from a previous session or a remote deployment. Please upload the media again.`);
