@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import fs from "fs";
 import dotenv from "dotenv";
 
@@ -40,5 +40,41 @@ export const uploadToS3 = async (filePath, filename) => {
   } catch (error) {
     console.error("Error uploading to S3:", error);
     throw error;
+  }
+};
+
+export const cleanS3Bucket = async () => {
+  if (process.env.AWS_ACCESS_KEY_ID === "mock-key" || !process.env.AWS_ACCESS_KEY_ID) {
+    return;
+  }
+  
+  const bucketName = process.env.AWS_BUCKET_NAME;
+  if (!bucketName) return;
+
+  try {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: 'processed-videos/'
+    });
+    const response = await s3Client.send(listCommand);
+    
+    if (!response.Contents) return;
+
+    const now = new Date();
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+    for (const object of response.Contents) {
+      const age = now - new Date(object.LastModified);
+      if (age > TWENTY_FOUR_HOURS) {
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: object.Key,
+        });
+        await s3Client.send(deleteCommand);
+        console.log(`[S3 Cleanup] Deleted old file: ${object.Key}`);
+      }
+    }
+  } catch (err) {
+    console.error("[S3 Cleanup] Error cleaning up S3 bucket:", err);
   }
 };

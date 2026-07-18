@@ -16,7 +16,16 @@ export const videoSlice = createSlice({
   initialState,
   reducers: {
     addAsset: (state, action) => {
-      state.assets.push(action.payload);
+      const exists = state.assets.find(asset => asset.id === action.payload.id);
+      if (!exists) {
+        state.assets.push(action.payload);
+      }
+    },
+    removeAsset: (state, action) => {
+      state.assets = state.assets.filter(asset => asset.id !== action.payload);
+      if (state.activeAssetId === action.payload) {
+        state.activeAssetId = null;
+      }
     },
     setActiveAsset: (state, action) => {
       state.activeAssetId = action.payload;
@@ -64,6 +73,6 @@ export const videoSlice = createSlice({
   },
 });
 
-export const { addAsset, setActiveAsset, startUpload, uploadComplete, updateProgress, processingComplete, setError, resetState } = videoSlice.actions;
+export const { addAsset, removeAsset, setActiveAsset, startUpload, uploadComplete, updateProgress, processingComplete, setError, resetState } = videoSlice.actions;
 
 export default videoSlice.reducer;

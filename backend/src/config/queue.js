@@ -1,7 +1,8 @@
 import { Queue, QueueEvents } from 'bullmq';
 import { redisConnection } from './redis.js';
 
-export const videoQueueName = 'video-processing';
+const envSuffix = process.env.NODE_ENV === 'production' ? '' : '-dev';
+export const videoQueueName = `video-processing${envSuffix}`;
 
 export const videoQueue = new Queue(videoQueueName, {
   connection: redisConnection,

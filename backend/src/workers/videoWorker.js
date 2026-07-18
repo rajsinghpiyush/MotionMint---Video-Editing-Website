@@ -44,6 +44,10 @@ export const videoWorker = new Worker(videoQueueName, async (job) => {
   const finalVideoPath = path.join(__dirname, '../../uploads', `processed-${filename}.mp4`);
 
   try {
+    if (!fs.existsSync(inputPath)) {
+      throw new Error(`Input file not found at ${inputPath}. This often happens if the file was on an ephemeral filesystem (like Render) and got deleted before the job was processed.`);
+    }
+
     await job.updateProgress({ percent: 10, status: 'Extracting audio for AI...', clientId });
 
     // 1. Extract audio
@@ -109,7 +113,9 @@ export const videoWorker = new Worker(videoQueueName, async (job) => {
 
     // Cleanup local files
     try {
-      fs.unlinkSync(inputPath);
+      if (!inputPath.includes('test-videos')) {
+        fs.unlinkSync(inputPath);
+      }
       fs.unlinkSync(audioOutputPath);
       fs.unlinkSync(finalVideoPath);
     } catch(e) {}
@@ -119,7 +125,9 @@ export const videoWorker = new Worker(videoQueueName, async (job) => {
   } catch (error) {
     console.error('AI Processing error in worker:', error);
     try {
-      fs.unlinkSync(inputPath);
+      if (!inputPath.includes('test-videos')) {
+        fs.unlinkSync(inputPath);
+      }
       fs.unlinkSync(audioOutputPath);
       fs.unlinkSync(finalVideoPath);
     } catch(e) {}

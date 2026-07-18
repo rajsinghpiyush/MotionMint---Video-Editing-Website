@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { startUpload, uploadComplete, setError, resetState, addAsset, setActiveAsset } from './store/slices/videoSlice.js';
+import { startUpload, uploadComplete, setError, resetState, addAsset, removeAsset, setActiveAsset } from './store/slices/videoSlice.js';
 import { addVideoClip } from './store/slices/timelineSlice.js';
 import { useWebSocket } from './hooks/useWebSocket.js';
 import { useMediaProcessing } from './hooks/useMediaProcessing.js';
-import { Upload, Video, Download, RefreshCw, AlertCircle, Plus, Search, FolderOpen, Image as ImageIcon, Music, LayoutDashboard, Settings, GripVertical, GripHorizontal } from 'lucide-react';
+import { Upload, Video, Download, RefreshCw, AlertCircle, Plus, Search, FolderOpen, Image as ImageIcon, Music, LayoutDashboard, Settings, GripVertical, GripHorizontal, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import VideoPlayer from './components/VideoPlayer.jsx';
 import Timeline from './components/Timeline.jsx';
@@ -27,6 +27,27 @@ export default function App() {
     url: null,
     error: null
   });
+
+  useEffect(() => {
+    const fetchTestVideos = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/test-videos`);
+        if (res.data && Array.isArray(res.data)) {
+          // Avoid duplicates by checking existing assets
+          res.data.forEach(video => {
+            if (!assets.find(a => a.id === video.id)) {
+              dispatch(addAsset(video));
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load test videos", err);
+      }
+    };
+    if (assets.length === 0) {
+      fetchTestVideos();
+    }
+  }, [dispatch, assets.length]);
 
   useEffect(() => {
     if (!socket) return;
@@ -70,21 +91,43 @@ export default function App() {
 
     dispatch(startUpload());
     dispatch(setActiveAsset(asset.id));
-    const formData = new FormData();
-    formData.append('video', asset.file);
-    formData.append('clientId', clientId);
 
     try {
-      await axios.post(`${API_URL}/api/upload`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      if (asset.file) {
+        const formData = new FormData();
+        formData.append('video', asset.file);
+        formData.append('clientId', clientId);
+
+        await axios.post(`${API_URL}/api/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      } else if (asset.url) {
+        await axios.post(`${API_URL}/api/process-existing`, {
+          url: asset.url,
+          clientId
+        });
+      } else {
+        throw new Error('No file or URL provided');
+      }
       dispatch(uploadComplete());
     } catch (err) {
       console.error(err);
-      dispatch(setError('Failed to upload video for AI processing'));
+      dispatch(setError('Failed to process video with AI'));
     }
+  };
+
+  const handleDeleteAsset = async (asset) => {
+    try {
+      if (asset.url && asset.url.includes('/uploads/')) {
+        const filename = asset.url.split('/').pop();
+        await axios.delete(`${API_URL}/api/upload/${filename}`);
+      }
+    } catch (err) {
+      console.error("Failed to delete asset from backend", err);
+    }
+    dispatch(removeAsset(asset.id));
   };
 
   return (
@@ -262,18 +305,27 @@ export default function App() {
                         </div>
                         
                         {/* Hover Actions */}
-                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 z-20">
                           <button 
                             onClick={() => dispatch(addVideoClip({ url: asset.url, name: asset.name, duration: asset.duration, mimeType: asset.mimeType }))}
-                            className="bg-purple-600 hover:bg-purple-500 text-white text-[10px] px-2 py-1 rounded font-medium transition-colors flex items-center gap-1"
+                            className="bg-purple-600 hover:bg-purple-500 text-white text-[10px] px-1.5 py-1 rounded font-medium transition-colors flex items-center gap-1"
                           >
                             <Plus size={12}/> Timeline
                           </button>
+                          {!import.meta.env.PROD && (
+                            <button 
+                              onClick={() => handleUploadAsset(asset)}
+                              className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] px-1.5 py-1 rounded font-medium transition-colors"
+                            >
+                              AI
+                            </button>
+                          )}
                           <button 
-                            onClick={() => handleUploadAsset(asset)}
-                            className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] px-2 py-1 rounded font-medium transition-colors"
+                            onClick={() => handleDeleteAsset(asset)}
+                            className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-1.5 py-1 rounded font-medium transition-colors"
+                            title="Delete"
                           >
-                            AI
+                            <Trash2 size={12}/>
                           </button>
                         </div>
                       </div>
